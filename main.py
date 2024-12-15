@@ -7,12 +7,13 @@ from pymongo import MongoClient, errors
 import datetime
 import time
 import urllib3
+from tenacity import retry, stop_after_attempt, wait_fixed
 import os
 
 # Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Configure logging with more detailed formatting
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -23,52 +24,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def validate_environment_variables():
-    """
-    Validate critical environment variables before script execution.
-    """
-    # Check Telegram Bot Token
-    telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
-    if not telegram_token:
-        logger.error("❌ TELEGRAM_BOT_TOKEN is not set!")
-        raise ValueError("TELEGRAM_BOT_TOKEN environment variable is required")
-    
-    # Perform a basic token format check (optional)
-    if len(telegram_token) < 30:  # Basic sanity check
-        logger.warning("⚠️ Telegram Bot Token looks suspiciously short")
-    
-    # Check MongoDB URI
-    mongo_uri = os.getenv("MONGO_DB_URI")
-    if not mongo_uri:
-        logger.error("❌ MONGO_DB_URI is not set!")
-        raise ValueError("MONGO_DB_URI environment variable is required")
-    
-    # Optional: Basic MongoDB connection test
-    try:
-        client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
-        client.server_info()  # This will raise an exception if connection fails
-        logger.info("✅ Successfully validated MongoDB connection")
-    except Exception as e:
-        logger.error(f"❌ MongoDB Connection Test Failed: {e}")
-        raise
-
-    # Optional: Test Telegram Bot Token (if you want to verify bot is working)
-    try:
-        url = f"https://api.telegram.org/bot{telegram_token}/getMe"
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200 and response.json().get('ok'):
-            logger.info("✅ Telegram Bot Token is valid")
-        else:
-            logger.error("❌ Telegram Bot Token appears to be invalid")
-            raise ValueError("Invalid Telegram Bot Token")
-    except Exception as e:
-        logger.error(f"❌ Telegram Bot Token Verification Failed: {e}")
-        raise
-
-# Global constants
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 MONGO_DB_URI = os.getenv("MONGO_DB_URI")
-ENGLISH_CHANNEL = "@gujtest2"
+ENGLISH_CHANNEL = "@daily_current_all_source"
 GUJARATI_CHANNEL = "@gujtest"
 
 def escape_markdown(text, version="v2"):
@@ -76,13 +34,11 @@ def escape_markdown(text, version="v2"):
     Escape special characters for Telegram Markdown V2.
     """
     if version == "v2":
-        # Characters that need escaping in Markdown V2
         escape_chars = '_*[]()~`>#+-=|{}.!'
         return ''.join('\\' + char if char in escape_chars else char for char in text)
-    else:  # Default to Markdown v1
+    else:
         special_characters = r'_[]()'
         return re.sub(f'([{re.escape(special_characters)}])', r'\\\1', text)
-
 
 def get_mongo_collection():
     """
@@ -108,9 +64,10 @@ def extract_date_from_url(url):
         logger.warning(f"Date extraction failed: {e}")
         return datetime.datetime.now().strftime('%Y-%m-%d')
 
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def send_telegram_message(message, channel):
     """
-    Send message to Telegram with detailed error handling.
+    Send message to Telegram with retry logic.
     """
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
@@ -122,12 +79,7 @@ def send_telegram_message(message, channel):
     
     try:
         response = requests.post(url, data=payload, timeout=10)
-        
-        if response.status_code != 200:
-            logger.error(f"Telegram response status: {response.status_code}")
-            logger.error(f"Telegram response content: {response.text}")
-            raise requests.exceptions.HTTPError(f"HTTP {response.status_code}: {response.text}")
-        
+        response.raise_for_status()
         result = response.json().get('result', {})
         message_id = result.get('message_id')
         logger.info(f"Message sent successfully to {channel}")
@@ -138,7 +90,7 @@ def send_telegram_message(message, channel):
 
 def smart_split_message(message, max_length=4096, footer=""):
     """
-    Intelligently split long messages into smaller chunks.
+    Intelligently split long messages into smaller chunks, ensuring no question is cut mid-block.
     """
     if len(message) + len(footer) <= max_length:
         return [message + footer]
@@ -189,7 +141,7 @@ def extract_question_data(soup, url):
     """
     try:
         date = extract_date_from_url(url)
-        message = f"✨✨ *Current Important Events \\- {date}* ✨✨\n\n"
+        message = f"✨✨ *Current Important Events \\- {escape_markdown(date)}* ✨✨\n\n"
         message += "🌟 *Today's Current Affairs Quiz* 🌟\n\n"
         
         question_containers = soup.find_all('div', class_='bix-div-container')
@@ -223,8 +175,8 @@ def extract_question_data(soup, url):
                 question_message = f"❓ *Question:* {escape_markdown(question_text)}\n\n"
                 question_message += f"🎯 *Correct Answer:* {escape_markdown(correct_answer_text)}\n\n"
                 question_message += f"💡 *Explanation:* {escape_markdown(explanation_text)}\n\n"
-                question_message += "\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\n\n"
-                 
+                question_message += "\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\n\n"
+                
                 message += question_message
             
             except Exception as e:
@@ -246,20 +198,17 @@ def process_current_affairs_url(url, collection):
         
         soup = BeautifulSoup(response.text, 'html.parser')
         message_english = extract_question_data(soup, url)
-        
         if not message_english:
             logger.warning(f"No questions extracted from URL: {url}")
             return
         
-        # Initialize promotional message outside conditional block
         promotional_message_english = escape_markdown(
             "\n\n🚀 Never miss an update on the latest current affairs and quizzes! 🌟\n"
             "👉 Join [Daily Current Affairs in English](https://t.me/daily_current_all_source) @Daily_Current_All_Source.\n"
             "👉 Follow [Gujarati Current Affairs](https://t.me/gujtest) @CurrentAdda. 🇮🇳✨\n\n"
             "Stay ahead of the competition. Join us now! 💪📚"
         )
-
-        # Process and send messages
+        
         english_messages = smart_split_message(message_english, footer=promotional_message_english)
         english_message_links = []
         
@@ -274,14 +223,13 @@ def process_current_affairs_url(url, collection):
             
             gujarati_message = (
                 f"{msg_gujarati}\n\n"
-                f"Read this post in English: [Click here]({english_link})\n\n"
+                f"Read this post in English: [Click here]({escape_markdown(english_link)})\n\n"
                 "👉 Join [Daily Current Affairs in English](https://t.me/daily_current_all_source)\n"
                 "👉 Follow [Gujarati Current Affairs](https://t.me/gujtest)\n\n"
             )
             
             send_telegram_message(gujarati_message, GUJARATI_CHANNEL)
         
-        # Mark URL as processed in MongoDB
         if collection is not None:
             collection.insert_one({"url": url, "processed_at": datetime.datetime.now()})
     
@@ -289,7 +237,6 @@ def process_current_affairs_url(url, collection):
         logger.error(f"Error processing URL {url}: {e}")
     except Exception as e:
         logger.error(f"Unexpected error processing URL {url}: {e}")
-
 
 def fetch_and_process_current_affairs():
     """
@@ -315,7 +262,7 @@ def fetch_and_process_current_affairs():
                 continue
             
             process_current_affairs_url(href, collection)
-            time.sleep(2)  # Delay to avoid server overload
+            time.sleep(2)
     
     except requests.exceptions.RequestException as e:
         logger.error(f"Request failed: {e}")
@@ -323,13 +270,6 @@ def fetch_and_process_current_affairs():
         logger.error(f"Unexpected error in fetch_and_process_current_affairs: {e}")
 
 if __name__ == '__main__':
-    try:
-        # Validate environment variables first
-        validate_environment_variables()
-        
-        logger.info("🚀 Starting Current Affairs Processing")
-        fetch_and_process_current_affairs()
-        logger.info("✅ Current Affairs Processing Completed Successfully")
-    except Exception as e:
-        logger.error(f"❌ Fatal Error: {e}")
-        raise
+    logger.info("🚀 Starting Current Affairs Processing")
+    fetch_and_process_current_affairs()
+    logger.info("✅ Current Affairs Processing Completed")
