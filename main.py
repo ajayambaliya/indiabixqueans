@@ -202,6 +202,7 @@ def process_current_affairs_url(url, collection):
 
         if collection is not None:
             collection.insert_one({"url": url, "processed_at": datetime.datetime.utcnow()})
+            logger.info(f"Logged URL to MongoDB: {url}")
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Error processing URL {url}: {e}")
