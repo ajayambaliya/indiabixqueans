@@ -4,3 +4,4 @@ pymongo
 deep-translator
 tenacity
 urllib3
+certifi
