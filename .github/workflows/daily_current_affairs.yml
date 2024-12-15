@@ -31,11 +31,11 @@ jobs:
         echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}"
         echo "MONGO_DB_URI=${{ secrets.MONGO_DB_URI }}"
 
-    - name: Set environment variables
-      env:
-        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        MONGO_DB_URI: ${{ secrets.MONGO_DB_URI }}
-      run: echo "Environment variables set."
+    - name: Install Root Certificates
+      # Fix SSL certificate issues by installing/updating certificates
+      run: |
+        sudo apt-get update
+        sudo apt-get install --reinstall ca-certificates
 
     - name: Run Current Affairs Script
       env:
