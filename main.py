@@ -8,6 +8,7 @@ import datetime
 import time
 import urllib3
 from tenacity import retry, stop_after_attempt, wait_fixed
+import os
 
 # Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
