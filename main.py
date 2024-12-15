@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 MONGO_DB_URI = os.getenv("MONGO_DB_URI")
-ENGLISH_CHANNEL = "@daily_current_all_source"
+ENGLISH_CHANNEL = "@dgujtest2"
 GUJARATI_CHANNEL = "@gujtest"
 
 # MongoDB setup with dynamic connection check
