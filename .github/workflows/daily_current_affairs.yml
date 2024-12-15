@@ -35,13 +35,4 @@ jobs:
           set -e  # Exit immediately if a command exits with a non-zero status
           python main.py
         
-        # Optional: upload log file as artifact if script fails
-        if: failure()
-      
-      # Step 5: Upload logs if something goes wrong
-      - name: Upload Logs on Failure
-        uses: actions/upload-artifact@v3
-        if: failure()
-        with:
-          name: error-logs
-          path: current_affairs.log
+       
