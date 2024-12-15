@@ -65,7 +65,14 @@ def extract_date_from_url(url):
 
 # Telegram message sender with retry logic
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+# Telegram message sender with retry logic
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def send_telegram_message(message, channel):
+    """
+    Sends a Telegram message to the specified channel. Logs the message length and
+    tracks the retry mechanism for potential failures.
+    """
+    message_length = len(message)
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
         'chat_id': channel,
@@ -73,17 +80,19 @@ def send_telegram_message(message, channel):
         'parse_mode': 'Markdown',
         'disable_web_page_preview': True
     }
-    logger.info(f"Sending message to {channel} with payload: {payload}")
+    logger.info(f"Attempting to send message to {channel} with length: {message_length} characters.")
+    
     try:
         response = requests.post(url, data=payload, timeout=10)
         response.raise_for_status()
         result = response.json().get('result', {})
         message_id = result.get('message_id')
-        logger.info(f"Message sent successfully to {channel}")
+        logger.info(f"Message sent successfully to {channel} with length: {message_length} characters.")
         return message_id
     except requests.exceptions.RequestException as e:
-        logger.error(f"Telegram send message failed: {e}")
+        logger.error(f"Telegram send message failed with length: {message_length} characters. Error: {e}")
         raise
+
 
 # Intelligently split messages
 def smart_split_message(message, max_length=4096, footer=""):
