@@ -65,10 +65,10 @@ def extract_date_from_url(url):
 
 # Telegram message sender with retry logic and fallback
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def send_telegram_message(message, channel):
     """
-    Sends a Telegram message to the specified channel. Logs the message length and
-    tracks retries for failures. Logs the content of failing messages for review.
+    Sends a Telegram message to the specified channel. Logs the message content on failure.
     """
     message_length = len(message)
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -78,7 +78,6 @@ def send_telegram_message(message, channel):
         'parse_mode': 'Markdown',
         'disable_web_page_preview': True
     }
-    
     logger.info(f"Attempting to send message to {channel} with length: {message_length} characters.")
     
     try:
@@ -90,13 +89,7 @@ def send_telegram_message(message, channel):
         return message_id
     except requests.exceptions.RequestException as e:
         logger.error(f"Telegram send message failed with length: {message_length} characters. Error: {e}")
-        
-        # Log the problematic message to a file for manual review
-        with open('failed_messages.log', 'a') as log_file:
-            log_file.write(f"\n\n--- Failed Message (Length: {message_length}) ---\n")
-            log_file.write(message)
-            log_file.write("\n----------------------------------------------\n")
-        
+        logger.error(f"Problematic message content:\n{message}")
         raise
 
 def send_telegram_message_with_fallback(message, channel):
