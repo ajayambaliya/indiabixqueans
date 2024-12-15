@@ -31,17 +31,15 @@ GUJARATI_CHANNEL = "@gujtest"
 
 # MongoDB setup with dynamic connection check
 def get_mongo_collection():
-    """
-    Get MongoDB collection with error handling.
-    """
     try:
         client = MongoClient(MONGO_DB_URI, serverSelectionTimeoutMS=5000)
         client.server_info()  # Verify connection
         db = client['current_affairs']
         return db['processed_urls']
-    except errors.PyMongoError as e:
-        logger.error(f"MongoDB connection failed: {e}")
+    except errors.ServerSelectionTimeoutError:
+        logger.error("MongoDB server is unreachable. Skipping database operations.")
         return None
+
 
 
 
