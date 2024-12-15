@@ -246,18 +246,20 @@ def process_current_affairs_url(url, collection):
         
         soup = BeautifulSoup(response.text, 'html.parser')
         message_english = extract_question_data(soup, url)
+        
         if not message_english:
             logger.warning(f"No questions extracted from URL: {url}")
             return
         
-            promotional_message_english = escape_markdown(
-                "\n\n🚀 Never miss an update on the latest current affairs and quizzes! 🌟\n"
-                "👉 Join [Daily Current Affairs in English](https://t.me/daily_current_all_source) @Daily_Current_All_Source.\n"
-                "👉 Follow [Gujarati Current Affairs](https://t.me/gujtest) @CurrentAdda. 🇮🇳✨\n\n"
-                "Stay ahead of the competition. Join us now! 💪📚"
-            )
+        # Initialize promotional message outside conditional block
+        promotional_message_english = escape_markdown(
+            "\n\n🚀 Never miss an update on the latest current affairs and quizzes! 🌟\n"
+            "👉 Join [Daily Current Affairs in English](https://t.me/daily_current_all_source) @Daily_Current_All_Source.\n"
+            "👉 Follow [Gujarati Current Affairs](https://t.me/gujtest) @CurrentAdda. 🇮🇳✨\n\n"
+            "Stay ahead of the competition. Join us now! 💪📚"
+        )
 
-        
+        # Process and send messages
         english_messages = smart_split_message(message_english, footer=promotional_message_english)
         english_message_links = []
         
@@ -279,6 +281,7 @@ def process_current_affairs_url(url, collection):
             
             send_telegram_message(gujarati_message, GUJARATI_CHANNEL)
         
+        # Mark URL as processed in MongoDB
         if collection is not None:
             collection.insert_one({"url": url, "processed_at": datetime.datetime.now()})
     
@@ -286,6 +289,7 @@ def process_current_affairs_url(url, collection):
         logger.error(f"Error processing URL {url}: {e}")
     except Exception as e:
         logger.error(f"Unexpected error processing URL {url}: {e}")
+
 
 def fetch_and_process_current_affairs():
     """
