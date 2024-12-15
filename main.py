@@ -29,6 +29,19 @@ MONGO_DB_URI = os.getenv("MONGO_DB_URI")
 ENGLISH_CHANNEL = "@gujtest2"
 GUJARATI_CHANNEL = "@gujtest"
 
+def escape_markdown(text, version="v2"):
+    """
+    Escape special characters for Telegram Markdown V2.
+    """
+    if version == "v2":
+        # MarkdownV2 special characters that need escaping
+        escape_chars = '_*[]()~`>#+-=|{}.!'
+        return ''.join('\\' + char if char in escape_chars else char for char in text)
+    else:  # Default to Markdown v1
+        special_characters = r'_[]()'
+        return re.sub(f'([{re.escape(special_characters)}])', r'\\\1', text)
+
+
 # MongoDB setup with dynamic connection check
 def get_mongo_collection():
     """
@@ -43,18 +56,6 @@ def get_mongo_collection():
         logger.error(f"MongoDB connection failed: {e}")
         return None
 
-def escape_markdown(text, version="v2"):
-    """
-    Escape special characters for Telegram Markdown.
-    """
-    if version == "v2":
-        # MarkdownV2 special characters
-        special_characters = r'_*[]()~`>#+-=|{}.!'
-    else:  # Default to Markdown v1
-        special_characters = r'_[]()'
-    
-    # Escape all special characters with a preceding backslash
-    return re.sub(f'([{re.escape(special_characters)}])', r'\\\1', text)
 
 
 
