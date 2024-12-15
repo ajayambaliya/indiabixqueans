@@ -5,7 +5,7 @@ import time
 import logging
 import datetime
 import urllib3
-
+import certifi  # Added for robust SSL handling
 import requests
 from bs4 import BeautifulSoup
 from deep_translator import GoogleTranslator
@@ -101,7 +101,7 @@ def fetch_url_with_retry(url, timeout=15):
         response = requests.get(
             url, 
             headers=headers,
-            verify=True,  # Enable SSL verification
+            verify=certifi.where(),  # Use certifi for SSL verification
             timeout=timeout
         )
         
@@ -146,7 +146,7 @@ def send_telegram_message(message, channel):
             f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage", 
             data=payload, 
             timeout=15,
-            verify=True
+            verify=certifi.where()  # Use certifi for secure API calls
         )
         
         if response.status_code != 200:
@@ -249,101 +249,6 @@ def extract_current_affairs_questions(soup, url):
         logger.error(f"Unexpected error extracting questions: {e}")
         return None
 
-def process_current_affairs_url(url, collection):
-    """
-    Process current affairs URL with comprehensive error handling.
-    
-    Args:
-        url (str): URL to process
-        collection (pymongo.collection.Collection): MongoDB collection
-    
-    Returns:
-        bool: Processing success status
-    """
-    try:
-        response = fetch_url_with_retry(url, verify=False)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        message_english = extract_current_affairs_questions(soup, url)
-        if not message_english:
-            logger.warning(f"No questions extracted from URL: {url}")
-            return False
-
-        promotional_message = "\n\n🚀 Join [Daily Current Affairs](https://t.me/daily_current_all_source) 🌟"
-        
-        # Send English message
-        message_id = send_telegram_message(message_english + promotional_message, ENGLISH_CHANNEL)
-        if not message_id:
-            logger.error(f"Failed to send English message for {url}")
-            return False
-
-        # Create English link
-        english_link = f"https://t.me/{ENGLISH_CHANNEL.strip('@')}/{message_id}"
-
-        # Translate and send Gujarati message
-        translated_message = translate_message(message_english)
-        gujarati_message = translated_message + f"\n\n🔗 Read in English: [Link]({english_link})"
-        
-        send_telegram_message(gujarati_message + promotional_message, GUJARATI_CHANNEL)
-
-        # Log processed URL
-        if collection is not None:
-            collection.insert_one({"url": url, "processed_at": datetime.datetime.utcnow()})
-
-        return True
-    
-    except Exception as e:
-        logger.error(f"Comprehensive error processing URL {url}: {e}")
-        return False
-
-def fetch_current_affairs_links():
-    """
-    Fetch current affairs links with comprehensive error handling and debugging.
-    
-    Returns:
-        list: URLs of current affairs
-    """
-    url = "https://www.indiabix.com/current-affairs/questions-and-answers/"
-    try:
-        # Add more verbose logging
-        logger.info(f"Attempting to fetch links from: {url}")
-        
-        response = fetch_url_with_retry(url)
-        logger.info(f"Successfully fetched response. Status code: {response.status_code}")
-        
-        soup = BeautifulSoup(response.text, 'html.parser')
-        current_date = datetime.datetime.now().strftime('%Y-%m')
-        logger.info(f"Searching for links matching current date pattern: {current_date}")
-        
-        # Debug: Print all links found
-        all_links = soup.find_all('a', class_='text-link me-3')
-        logger.info(f"Total links found: {len(all_links)}")
-        
-        links = []
-        for link in all_links:
-            href = link.get('href')
-            if href and current_date in href:
-                logger.info(f"Matched link: {href}")
-                links.append(href)
-        
-        logger.info(f"Filtered links count: {len(links)}")
-        return links
-    
-    except requests.exceptions.RequestException as req_err:
-        logger.error(f"Request error fetching links: {req_err}")
-        logger.error(f"Error details: {type(req_err)}, {str(req_err)}")
-    except Exception as e:
-        logger.error(f"Unexpected error fetching current affairs links: {e}")
-        logger.error(f"Error type: {type(e)}")
-        logger.error(f"Error details: {str(e)}")
-        
-        # Additional debugging for TypeError
-        import traceback
-        logger.error("Full traceback:")
-        logger.error(traceback.format_exc())
-    
-    return []
-
 def main():
     """
     Main execution function with comprehensive error handling.
@@ -357,7 +262,7 @@ def main():
         
         processed_count = 0
         for url in links:
-            if collection is not None and collection.find_one({"url": url}):
+            if collection and collection.find_one({"url": url}):
                 logger.info(f"URL already processed: {url}")
                 continue
             
