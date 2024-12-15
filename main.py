@@ -48,11 +48,14 @@ def escape_markdown(text, version="v2"):
     Escape special characters for Telegram Markdown.
     """
     if version == "v2":
+        # MarkdownV2 special characters
         special_characters = r'_*[]()~`>#+-=|{}.!'
     else:  # Default to Markdown v1
         special_characters = r'_[]()'
     
+    # Escape all special characters with a preceding backslash
     return re.sub(f'([{re.escape(special_characters)}])', r'\\\1', text)
+
 
 
 
@@ -168,7 +171,8 @@ def extract_question_data(soup, url):
                 question_message = f"❓ *Question:* {escape_markdown(question_text)}\n\n"
                 question_message += f"🎯 *Correct Answer:* {escape_markdown(correct_answer_text)}\n\n"
                 question_message += f"💡 *Explanation:* {escape_markdown(explanation_text)}\n\n"
-                question_message += "--------------------------------------\n\n"
+                question_message += escape_markdown("--------------------------------------\n\n")
+
 
                 
                 message += question_message
