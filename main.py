@@ -57,7 +57,11 @@ def extract_date_from_url(url):
         logger.warning(f"Date extraction failed: {e}")
         return datetime.datetime.now().strftime('%Y-%m-%d')
 
-@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+def escape_markdown(text):
+    special_characters = r'_*[]()~`>#+-=|{}.!'
+    return re.sub(f'([{re.escape(special_characters)}])', r'\\\1', text)
+
+
 def send_telegram_message(message, channel):
     """
     Send message to Telegram with retry logic.
@@ -69,6 +73,7 @@ def send_telegram_message(message, channel):
         'parse_mode': 'Markdown',
         'disable_web_page_preview': True  # Disable web page previews
     }
+    logger.debug(f"Sending payload to Telegram: {payload}")
     
     try:
         response = requests.post(url, data=payload, timeout=10)
@@ -79,7 +84,9 @@ def send_telegram_message(message, channel):
         return message_id
     except requests.exceptions.RequestException as e:
         logger.error(f"Telegram send message failed: {e}")
+        logger.error(f"Response: {e.response.text}")  # Log Telegram's error message
         raise  # Retry using tenacity
+
 
 
 def smart_split_message(message, max_length=4096, footer=""):
