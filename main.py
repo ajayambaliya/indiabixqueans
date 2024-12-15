@@ -8,7 +8,6 @@ import datetime
 import time
 import urllib3
 from tenacity import retry, stop_after_attempt, wait_fixed
-import os
 
 # Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -26,20 +25,10 @@ logger = logging.getLogger(__name__)
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 MONGO_DB_URI = os.getenv("MONGO_DB_URI")
-ENGLISH_CHANNEL = "@daily_current_all_source"
+ENGLISH_CHANNEL = "@gujtest2"
 GUJARATI_CHANNEL = "@gujtest"
 
-def escape_markdown(text, version="v2"):
-    """
-    Escape special characters for Telegram Markdown V2.
-    """
-    if version == "v2":
-        escape_chars = '_*[]()~`>#+-=|{}.!'
-        return ''.join('\\' + char if char in escape_chars else char for char in text)
-    else:
-        special_characters = r'_[]()'
-        return re.sub(f'([{re.escape(special_characters)}])', r'\\\1', text)
-
+# MongoDB setup with dynamic connection check
 def get_mongo_collection():
     """
     Get MongoDB collection with error handling.
@@ -52,6 +41,9 @@ def get_mongo_collection():
     except errors.PyMongoError as e:
         logger.error(f"MongoDB connection failed: {e}")
         return None
+
+
+
 
 def extract_date_from_url(url):
     """
@@ -73,8 +65,8 @@ def send_telegram_message(message, channel):
     payload = {
         'chat_id': channel,
         'text': message,
-        'parse_mode': 'MarkdownV2',
-        'disable_web_page_preview': True
+        'parse_mode': 'Markdown',
+        'disable_web_page_preview': True  # Disable web page previews
     }
     
     try:
@@ -86,7 +78,8 @@ def send_telegram_message(message, channel):
         return message_id
     except requests.exceptions.RequestException as e:
         logger.error(f"Telegram send message failed: {e}")
-        raise
+        raise  # Retry using tenacity
+
 
 def smart_split_message(message, max_length=4096, footer=""):
     """
@@ -100,40 +93,23 @@ def smart_split_message(message, max_length=4096, footer=""):
     current_message = ""
     
     for block in blocks:
+        # Add block to current message if it fits within the limit
         if len(current_message) + len(block) + len(footer) <= max_length:
             current_message += block + "--------------------------------------\n\n"
         else:
+            # Finalize the current message and start a new one
             split_messages.append(current_message + footer)
             current_message = block + "--------------------------------------\n\n"
     
+    # Add the last remaining message
     if current_message.strip():
         split_messages.append(current_message + footer)
     
     return split_messages
 
-def translate_message(message):
-    """
-    Translate the provided message to Gujarati.
-    """
-    try:
-        sections = message.split("\n\n")
-        translated_sections = []
-        
-        for section in sections:
-            if 'Question:' in section or 'Correct Answer:' in section or 'Explanation:' in section:
-                try:
-                    translated_section = GoogleTranslator(source='en', target='gu').translate(section)
-                    translated_sections.append(translated_section)
-                except Exception as translation_err:
-                    logger.warning(f"Translation error for section: {translation_err}")
-                    translated_sections.append(section)
-            else:
-                translated_sections.append(section)
-        
-        return "\n\n".join(translated_sections)
-    except Exception as e:
-        logger.error(f"Error in translation: {e}")
-        return message
+
+
+
 
 def extract_question_data(soup, url):
     """
@@ -141,7 +117,7 @@ def extract_question_data(soup, url):
     """
     try:
         date = extract_date_from_url(url)
-        message = f"✨✨ *Current Important Events \\- {escape_markdown(date)}* ✨✨\n\n"
+        message = f"✨✨ *Current Important Events - {date}* ✨✨\n\n"
         message += "🌟 *Today's Current Affairs Quiz* 🌟\n\n"
         
         question_containers = soup.find_all('div', class_='bix-div-container')
@@ -172,10 +148,10 @@ def extract_question_data(soup, url):
                 explanation_div = container.find('div', class_='bix-ans-description')
                 explanation_text = explanation_div.text.strip() if explanation_div else "No detailed explanation available"
                 
-                question_message = f"❓ *Question:* {escape_markdown(question_text)}\n\n"
-                question_message += f"🎯 *Correct Answer:* {escape_markdown(correct_answer_text)}\n\n"
-                question_message += f"💡 *Explanation:* {escape_markdown(explanation_text)}\n\n"
-                question_message += "\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\n\n"
+                question_message = f"❓ *Question:* {question_text}\n\n"
+                question_message += f"🎯 *Correct Answer:* {correct_answer_text}\n\n"
+                question_message += f"💡 *Explanation:* {explanation_text}\n\n"
+                question_message += "--------------------------------------\n\n"
                 
                 message += question_message
             
@@ -202,34 +178,42 @@ def process_current_affairs_url(url, collection):
             logger.warning(f"No questions extracted from URL: {url}")
             return
         
-        promotional_message_english = escape_markdown(
+        # Add a promotional footer (only for English messages during splitting)
+        promotional_message_english = (
             "\n\n🚀 Never miss an update on the latest current affairs and quizzes! 🌟\n"
             "👉 Join [Daily Current Affairs in English](https://t.me/daily_current_all_source) @Daily_Current_All_Source.\n"
             "👉 Follow [Gujarati Current Affairs](https://t.me/gujtest) @CurrentAdda. 🇮🇳✨\n\n"
             "Stay ahead of the competition. Join us now! 💪📚"
         )
         
+        # Split English messages into chunks with the promotional footer
         english_messages = smart_split_message(message_english, footer=promotional_message_english)
-        english_message_links = []
+        english_message_links = []  # To store links of English posts
         
+        # Send English messages
         for msg in english_messages:
             message_id = send_telegram_message(msg, ENGLISH_CHANNEL)
             if message_id:
+                # Construct the URL for the Telegram post
                 post_link = f"https://t.me/{ENGLISH_CHANNEL.strip('@')}/{message_id}"
                 english_message_links.append(post_link)
         
+        # Send Gujarati messages with translated content
         for msg_english, english_link in zip(english_messages, english_message_links):
+            # Translate the English message
             msg_gujarati = translate_message(msg_english)
             
+            # Append the English post link to the Gujarati message without duplicating the promotional footer
             gujarati_message = (
                 f"{msg_gujarati}\n\n"
-                f"Read this post in English: [Click here]({escape_markdown(english_link)})\n\n"
+                f"Read this post in English: [Click here]({english_link})\n\n"
                 "👉 Join [Daily Current Affairs in English](https://t.me/daily_current_all_source)\n"
                 "👉 Follow [Gujarati Current Affairs](https://t.me/gujtest)\n\n"
             )
             
             send_telegram_message(gujarati_message, GUJARATI_CHANNEL)
         
+        # Mark the URL as processed in the database
         if collection is not None:
             collection.insert_one({"url": url, "processed_at": datetime.datetime.now()})
     
@@ -237,6 +221,41 @@ def process_current_affairs_url(url, collection):
         logger.error(f"Error processing URL {url}: {e}")
     except Exception as e:
         logger.error(f"Unexpected error processing URL {url}: {e}")
+
+
+
+
+
+
+
+def translate_message(message):
+    """
+    Translate the provided message to Gujarati.
+    """
+    try:
+        # Split the message into sections
+        sections = message.split("\n\n")
+        translated_sections = []
+        
+        for section in sections:
+            if 'Question:' in section or 'Correct Answer:' in section or 'Explanation:' in section:
+                try:
+                    # Translate only relevant sections
+                    translated_section = GoogleTranslator(source='en', target='gu').translate(section)
+                    translated_sections.append(translated_section)
+                except Exception as translation_err:
+                    logger.warning(f"Translation error for section: {translation_err}")
+                    translated_sections.append(section)  # Fallback to original section
+            else:
+                # Append other sections as is
+                translated_sections.append(section)
+        
+        return "\n\n".join(translated_sections)
+    except Exception as e:
+        logger.error(f"Error in translation: {e}")
+        return message
+
+
 
 def fetch_and_process_current_affairs():
     """
@@ -257,19 +276,21 @@ def fetch_and_process_current_affairs():
             if not href or current_date not in href:
                 continue
             
+            # Use 'collection is not None' for truth-value testing
             if collection is not None and collection.find_one({"url": href}):
                 logger.info(f"URL already processed: {href}")
                 continue
             
             process_current_affairs_url(href, collection)
-            time.sleep(2)
+            time.sleep(2)  # Delay to avoid server overload
     
     except requests.exceptions.RequestException as e:
         logger.error(f"Request failed: {e}")
     except Exception as e:
         logger.error(f"Unexpected error in fetch_and_process_current_affairs: {e}")
 
+
 if __name__ == '__main__':
-    logger.info("🚀 Starting Current Affairs Processing")
+    logger.info("Starting Current Affairs Processing")
     fetch_and_process_current_affairs()
-    logger.info("✅ Current Affairs Processing Completed")
+    logger.info("Current Affairs Processing Completed")
