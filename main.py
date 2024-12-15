@@ -57,17 +57,14 @@ def extract_date_from_url(url):
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def send_telegram_message(message, channel):
-    """
-    Send message to Telegram with retry logic.
-    """
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
         'chat_id': channel,
         'text': message,
         'parse_mode': 'Markdown',
-        'disable_web_page_preview': True  # Disable web page previews
+        'disable_web_page_preview': True
     }
-    
+    logger.info(f"Sending message to {channel} with payload: {payload}")
     try:
         response = requests.post(url, data=payload, timeout=10)
         response.raise_for_status()
@@ -77,7 +74,8 @@ def send_telegram_message(message, channel):
         return message_id
     except requests.exceptions.RequestException as e:
         logger.error(f"Telegram send message failed: {e}")
-        raise  # Retry using tenacity
+        raise
+
 
 
 def smart_split_message(message, max_length=4096, footer=""):
