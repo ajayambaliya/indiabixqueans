@@ -52,11 +52,14 @@ def get_mongo_collection():
 
 # Escape Markdown characters for Telegram messages
 def escape_markdown(text):
-    """
-    Escapes Markdown special characters to prevent parsing errors in Telegram.
-    """
-    return re.sub(r'([_*\[\]()~`>#+\-=|{}.!\\])', r'\\\1', text)
+    return re.sub(r'([_*\[\]()~`>#+\-=|{}.!])', r'\\\1', text)
 
+# Truncate a message to avoid exceeding Telegram's character limit
+def truncate_message(message, max_length=4096):
+    if len(message) > max_length:
+        logger.warning(f"Truncating message from {len(message)} to {max_length} characters.")
+        return message[:max_length - 50] + "\n\nMessage truncated due to length."
+    return message
 
 # Extract date from URL
 def extract_date_from_url(url):
@@ -69,10 +72,10 @@ def extract_date_from_url(url):
 
 # Telegram message sender with retry logic and fallback
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def send_telegram_message(message, channel):
     """
-    Sends a Telegram message to the specified channel. Logs the message content on failure.
+    Sends a Telegram message to the specified channel. Logs the message length and
+    tracks retries for failures. Logs the content of failing messages for review.
     """
     message_length = len(message)
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -82,6 +85,7 @@ def send_telegram_message(message, channel):
         'parse_mode': 'Markdown',
         'disable_web_page_preview': True
     }
+    
     logger.info(f"Attempting to send message to {channel} with length: {message_length} characters.")
     
     try:
@@ -93,29 +97,10 @@ def send_telegram_message(message, channel):
         return message_id
     except requests.exceptions.RequestException as e:
         logger.error(f"Telegram send message failed with length: {message_length} characters. Error: {e}")
-        logger.error(f"Problematic message content:\n{message}")
-        raise
-
-def send_telegram_message_with_fallback(message, channel):
-    """
-    Attempts to send a Telegram message with retries and fallback truncation.
-    Logs sections of the message for better debugging.
-    """
-    try:
-        logger.info(f"Full message content:\n{message}")
-        return send_telegram_message(message, channel)
-    except requests.exceptions.RequestException as e:
-        logger.warning("Message failed. Attempting truncation.")
-        truncated_message = message[:3500] + "\n\nMessage truncated due to error."
         
-        logger.info(f"Truncated message content:\n{truncated_message}")
-        try:
-            return send_telegram_message(truncated_message, channel)
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Message failed even after truncation. Error: {e}")
-            logger.error(f"Failed message content:\n{truncated_message}")
-            raise
-
+        # Log the problematic message to GitHub Actions logs
+        logger.error(f"Problematic message content (length: {message_length}):\n{message}")
+        raise
 
 # Intelligently split messages
 def smart_split_message(message, max_length=4096, footer=""):
@@ -223,16 +208,16 @@ def process_current_affairs_url(url, collection):
 
         english_links = []
         for msg in english_messages:
-            escaped_msg = escape_markdown(msg)
-            message_id = send_telegram_message_with_fallback(escaped_msg, ENGLISH_CHANNEL)
+            truncated_msg = truncate_message(msg)
+            message_id = send_telegram_message(truncated_msg, ENGLISH_CHANNEL)
             if message_id:
                 english_links.append(f"https://t.me/{ENGLISH_CHANNEL.strip('@')}/{message_id}")
 
         for msg, link in zip(english_messages, english_links):
             translated_msg = translate_message(msg)
-            escaped_translated_msg = escape_markdown(translated_msg)
-            escaped_translated_msg += f"\n\n🔗 Read in English: [Click here]({link})"
-            send_telegram_message_with_fallback(escaped_translated_msg, GUJARATI_CHANNEL)
+            translated_msg += f"\n\n🔗 Read in English: [Click here]({link})"
+            truncated_gujarati_msg = truncate_message(translated_msg)
+            send_telegram_message(truncated_gujarati_msg, GUJARATI_CHANNEL)
 
         if collection is not None:
             collection.insert_one({"url": url, "processed_at": datetime.datetime.utcnow()})
@@ -242,7 +227,6 @@ def process_current_affairs_url(url, collection):
         logger.error(f"Error processing URL {url}: {e}")
     except Exception as e:
         logger.error(f"Unexpected error processing URL {url}: {e}")
-
 
 # Main fetching function
 def fetch_and_process_current_affairs():
