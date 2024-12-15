@@ -1,0 +1,37 @@
+name: Daily Current Affairs Script
+
+on:
+  schedule:
+    # Schedule the workflow to run every day at 12:01 PM IST
+    # IST is UTC+5:30, so this translates to 06:31 AM UTC
+    - cron: '31 6 * * *'
+
+  workflow_dispatch: # Allows manual trigger of the workflow
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # Step 2: Set up Python environment
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+
+      # Step 3: Install dependencies
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Step 4: Run the script
+      - name: Run Current Affairs Script
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          MONGO_DB_URI: ${{ secrets.MONGO_DB_URI }}
+        run: python main.py
