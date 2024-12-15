@@ -184,6 +184,9 @@ def process_current_affairs_url(url, collection):
 
 # Main fetching function
 def fetch_and_process_current_affairs():
+    """
+    Fetch and process current affairs from the main page.
+    """
     url = "https://www.indiabix.com/current-affairs/questions-and-answers/"
     try:
         response = requests.get(url, verify=False, timeout=10)
@@ -199,17 +202,19 @@ def fetch_and_process_current_affairs():
             if not href or current_date not in href:
                 continue
 
-            if collection and collection.find_one({"url": href}):
+            # Explicit comparison with None
+            if collection is not None and collection.find_one({"url": href}):
                 logger.info(f"URL already processed: {href}")
                 continue
 
             process_current_affairs_url(href, collection)
-            time.sleep(2)
+            time.sleep(2)  # Delay to avoid server overload
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Request failed: {e}")
     except Exception as e:
         logger.error(f"Unexpected error in fetch_and_process_current_affairs: {e}")
+
 
 if __name__ == '__main__':
     logger.info("Starting Current Affairs Processing")
