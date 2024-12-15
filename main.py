@@ -75,7 +75,7 @@ def escape_markdown_v2(text):
 @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
 def fetch_url_with_retry(url, timeout=15):
     """
-    Enhanced URL fetching with robust error handling and user agent.
+    Enhanced URL fetching with comprehensive error handling.
     
     Args:
         url (str): URL to fetch
@@ -85,19 +85,39 @@ def fetch_url_with_retry(url, timeout=15):
         requests.Response: HTTP response
     """
     try:
+        # Validate URL before request
+        if not url or not url.startswith(('http://', 'https://')):
+            raise ValueError(f"Invalid URL: {url}")
+        
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Referer': 'https://www.google.com/'
         }
+        
+        logger.info(f"Attempting to fetch URL: {url}")
+        
         response = requests.get(
             url, 
             headers=headers,
             verify=True,  # Enable SSL verification
             timeout=timeout
         )
+        
+        # Additional status code checking
         response.raise_for_status()
+        
+        logger.info(f"Successfully fetched URL: {url}")
         return response
+    
     except requests.exceptions.RequestException as e:
-        logger.error(f"URL fetch error for {url}: {e}")
+        logger.error(f"Detailed request error for {url}: {e}")
+        logger.error(f"Error type: {type(e)}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error fetching {url}: {e}")
+        logger.error(f"Error type: {type(e)}")
         raise
 
 def send_telegram_message(message, channel):
@@ -276,29 +296,53 @@ def process_current_affairs_url(url, collection):
         logger.error(f"Comprehensive error processing URL {url}: {e}")
         return False
 
-def fetch_current_affairs_links():
+Copydef fetch_current_affairs_links():
     """
-    Fetch current affairs links with robust error handling.
+    Fetch current affairs links with comprehensive error handling and debugging.
     
     Returns:
         list: URLs of current affairs
     """
     url = "https://www.indiabix.com/current-affairs/questions-and-answers/"
     try:
-        response = fetch_url_with_retry(url, verify=False)
+        # Add more verbose logging
+        logger.info(f"Attempting to fetch links from: {url}")
+        
+        response = fetch_url_with_retry(url)
+        logger.info(f"Successfully fetched response. Status code: {response.status_code}")
+        
         soup = BeautifulSoup(response.text, 'html.parser')
         current_date = datetime.datetime.now().strftime('%Y-%m')
+        logger.info(f"Searching for links matching current date pattern: {current_date}")
         
-        links = [
-            link.get('href') 
-            for link in soup.find_all('a', class_='text-link me-3') 
-            if link.get('href') and current_date in link.get('href')
-        ]
+        # Debug: Print all links found
+        all_links = soup.find_all('a', class_='text-link me-3')
+        logger.info(f"Total links found: {len(all_links)}")
         
+        links = []
+        for link in all_links:
+            href = link.get('href')
+            if href and current_date in href:
+                logger.info(f"Matched link: {href}")
+                links.append(href)
+        
+        logger.info(f"Filtered links count: {len(links)}")
         return links
+    
+    except requests.exceptions.RequestException as req_err:
+        logger.error(f"Request error fetching links: {req_err}")
+        logger.error(f"Error details: {type(req_err)}, {str(req_err)}")
     except Exception as e:
-        logger.error(f"Error fetching current affairs links: {e}")
-        return []
+        logger.error(f"Unexpected error fetching current affairs links: {e}")
+        logger.error(f"Error type: {type(e)}")
+        logger.error(f"Error details: {str(e)}")
+        
+        # Additional debugging for TypeError
+        import traceback
+        logger.error("Full traceback:")
+        logger.error(traceback.format_exc())
+    
+    return []
 
 def main():
     """
