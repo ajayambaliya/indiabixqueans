@@ -43,6 +43,16 @@ def get_mongo_collection():
         logger.error(f"MongoDB connection failed: {e}")
         return None
 
+def escape_markdown(text, version="v2"):
+    """
+    Escape special characters for Telegram Markdown.
+    """
+    if version == "v2":
+        special_characters = r'_*[]()~`>#+-=|{}.!'
+    else:  # Default to Markdown v1
+        special_characters = r'_[]()'
+    
+    return re.sub(f'([{re.escape(special_characters)}])', r'\\\1', text)
 
 
 
@@ -67,7 +77,7 @@ def send_telegram_message(message, channel):
     payload = {
         'chat_id': channel,
         'text': message,
-        'parse_mode': 'Markdown',
+        'parse_mode': 'MarkdownV2',  # Use MarkdownV2 for stricter parsing
         'disable_web_page_preview': True  # Disable web page previews
     }
     logger.debug(f"Sending payload to Telegram: {payload}")
@@ -81,8 +91,10 @@ def send_telegram_message(message, channel):
         return message_id
     except requests.exceptions.RequestException as e:
         logger.error(f"Telegram send message failed: {e}")
-        logger.error(f"Response: {e.response.text}")  # Log Telegram's error message
+        if e.response is not None:
+            logger.error(f"Response: {e.response.text}")  # Log Telegram's error message
         raise  # Retry using tenacity
+
 
 
 
@@ -153,10 +165,11 @@ def extract_question_data(soup, url):
                 explanation_div = container.find('div', class_='bix-ans-description')
                 explanation_text = explanation_div.text.strip() if explanation_div else "No detailed explanation available"
                 
-                question_message = f"❓ *Question:* {question_text}\n\n"
-                question_message += f"🎯 *Correct Answer:* {correct_answer_text}\n\n"
-                question_message += f"💡 *Explanation:* {explanation_text}\n\n"
+                question_message = f"❓ *Question:* {escape_markdown(question_text)}\n\n"
+                question_message += f"🎯 *Correct Answer:* {escape_markdown(correct_answer_text)}\n\n"
+                question_message += f"💡 *Explanation:* {escape_markdown(explanation_text)}\n\n"
                 question_message += "--------------------------------------\n\n"
+
                 
                 message += question_message
             
