@@ -33,4 +33,4 @@ jobs:
       run: echo "Environment variables set."
 
     - name: Run Current Affairs Script
-      run: python script.py
+      run: python main.py
