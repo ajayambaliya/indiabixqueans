@@ -65,33 +65,29 @@ def extract_date_from_url(url):
 
 # Telegram message sender with retry logic
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-# Telegram message sender with retry logic
-@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-def send_telegram_message(message, channel):
+def send_telegram_message_with_fallback(message, channel):
     """
-    Sends a Telegram message to the specified channel. Logs the message length and
-    tracks the retry mechanism for potential failures.
+    Attempts to send a Telegram message. If it fails due to content length or formatting,
+    it gradually truncates the message and retries.
     """
-    message_length = len(message)
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {
-        'chat_id': channel,
-        'text': message,
-        'parse_mode': 'Markdown',
-        'disable_web_page_preview': True
-    }
-    logger.info(f"Attempting to send message to {channel} with length: {message_length} characters.")
-    
     try:
-        response = requests.post(url, data=payload, timeout=10)
-        response.raise_for_status()
-        result = response.json().get('result', {})
-        message_id = result.get('message_id')
-        logger.info(f"Message sent successfully to {channel} with length: {message_length} characters.")
-        return message_id
+        return send_telegram_message(message, channel)
     except requests.exceptions.RequestException as e:
-        logger.error(f"Telegram send message failed with length: {message_length} characters. Error: {e}")
-        raise
+        logger.warning("Message failed. Attempting truncation.")
+        truncated_message = message[:3500] + "\n\nMessage truncated due to error."
+        
+        try:
+            return send_telegram_message(truncated_message, channel)
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Message failed even after truncation. Error: {e}")
+            
+            # Log truncated message to a file for manual review
+            with open('failed_messages.log', 'a') as log_file:
+                log_file.write(f"\n\n--- Failed Truncated Message (Length: {len(truncated_message)}) ---\n")
+                log_file.write(truncated_message)
+                log_file.write("\n----------------------------------------------\n")
+            
+            raise
 
 
 # Intelligently split messages
