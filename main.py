@@ -1,11 +1,10 @@
 import os
 import sys
-import re
 import time
 import logging
 import datetime
 import urllib3
-import certifi  # Added for robust SSL handling
+import certifi  # For SSL verification
 import requests
 from bs4 import BeautifulSoup
 from deep_translator import GoogleTranslator
@@ -104,13 +103,10 @@ def fetch_url_with_retry(url, timeout=15):
             verify=certifi.where(),  # Use certifi for SSL verification
             timeout=timeout
         )
-        
-        # Additional status code checking
         response.raise_for_status()
         
         logger.info(f"Successfully fetched URL: {url}")
         return response
-    
     except requests.exceptions.RequestException as e:
         logger.error(f"Detailed request error for {url}: {e}")
         logger.error(f"Error type: {type(e)}")
@@ -120,78 +116,30 @@ def fetch_url_with_retry(url, timeout=15):
         logger.error(f"Error type: {type(e)}")
         raise
 
-def send_telegram_message(message, channel):
+def fetch_current_affairs_links():
     """
-    Send message to Telegram with enhanced error handling and Markdown V2 support.
-    
-    Args:
-        message (str): Message to send
-        channel (str): Telegram channel
+    Fetch current affairs links with comprehensive error handling and debugging.
     
     Returns:
-        int or None: Message ID if successful, None otherwise
+        list: URLs of current affairs
     """
+    url = "https://www.indiabix.com/current-affairs/questions-and-answers/"
     try:
-        # Additional escaping for Markdown V2
-        message = escape_markdown_v2(message)
+        logger.info(f"Attempting to fetch links from: {url}")
+        response = fetch_url_with_retry(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
         
-        payload = {
-            'chat_id': channel,
-            'text': message,
-            'parse_mode': 'MarkdownV2',
-            'disable_web_page_preview': True
-        }
+        current_date = datetime.datetime.now().strftime('%Y-%m')
+        logger.info(f"Searching for links matching current date pattern: {current_date}")
         
-        response = requests.post(
-            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage", 
-            data=payload, 
-            timeout=15,
-            verify=certifi.where()  # Use certifi for secure API calls
-        )
+        all_links = soup.find_all('a', class_='text-link me-3')
+        links = [link.get('href') for link in all_links if link.get('href') and current_date in link.get('href')]
         
-        if response.status_code != 200:
-            logger.error(f"Telegram API Error: {response.status_code}")
-            logger.error(f"Response Content: {response.text}")
-            return None
-        
-        return response.json().get('result', {}).get('message_id')
-    
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Network error sending Telegram message: {e}")
-        return None
+        logger.info(f"Filtered links count: {len(links)}")
+        return links
     except Exception as e:
-        logger.error(f"Unexpected error sending Telegram message: {e}")
-        return None
-
-def translate_message(message):
-    """
-    Robust translation with section-wise translation and error handling.
-    
-    Args:
-        message (str): Message to translate
-    
-    Returns:
-        str: Translated message
-    """
-    try:
-        sections = message.split("\n\n")
-        translated_sections = []
-        
-        for section in sections:
-            try:
-                if any(key in section for key in ["Question:", "Correct Answer:", "Explanation:"]):
-                    translated = GoogleTranslator(source='en', target='gu').translate(section)
-                    translated_sections.append(translated)
-                else:
-                    translated_sections.append(section)
-            except Exception as inner_e:
-                logger.warning(f"Translation section error: {inner_e}")
-                translated_sections.append(section)
-        
-        return "\n\n".join(translated_sections)
-    except Exception as e:
-        logger.error(f"Overall translation error: {e}")
-        return message
+        logger.error(f"Error fetching current affairs links: {e}")
+        return []
 
 def extract_current_affairs_questions(soup, url):
     """
@@ -215,32 +163,15 @@ def extract_current_affairs_questions(soup, url):
 
         for container in question_containers:
             try:
-                question_text = container.find('div', class_='bix-td-qtxt')
-                if not question_text:
-                    continue
-
-                question_text = question_text.text.strip()
-                correct_answer = container.find('input', {'class': 'jq-hdnakq'})
-                correct_answer = correct_answer.get('value', '').strip() if correct_answer else ''
-
-                option_divs = container.find_all('div', {'class': 'bix-td-option-val'})
-                option_letters = ['A', 'B', 'C', 'D']
-
-                correct_answer_text = ""
-                if correct_answer and option_divs:
-                    for opt_idx, div in enumerate(option_divs):
-                        if div and div.text.strip() and option_letters[opt_idx] == correct_answer:
-                            correct_answer_text = div.text.strip()
-                            break
-
+                question_text = container.find('div', class_='bix-td-qtxt').text.strip()
+                correct_answer = container.find('input', {'class': 'jq-hdnakq'}).get('value', '').strip()
                 explanation_div = container.find('div', class_='bix-ans-description')
                 explanation_text = explanation_div.text.strip() if explanation_div else "No explanation available"
 
                 message += f"❓ *Question:* {question_text}\n"
-                message += f"🎯 *Correct Answer:* {correct_answer_text}\n"
+                message += f"🎯 *Correct Answer:* {correct_answer}\n"
                 message += f"💡 *Explanation:* {explanation_text}\n\n"
                 message += "--------------------------------------\n\n"
-
             except Exception as inner_e:
                 logger.error(f"Error processing individual question: {inner_e}")
 
@@ -248,6 +179,66 @@ def extract_current_affairs_questions(soup, url):
     except Exception as e:
         logger.error(f"Unexpected error extracting questions: {e}")
         return None
+
+def send_telegram_message(message, channel):
+    """
+    Send message to Telegram with enhanced error handling and Markdown V2 support.
+    
+    Args:
+        message (str): Message to send
+        channel (str): Telegram channel
+    
+    Returns:
+        int or None: Message ID if successful, None otherwise
+    """
+    try:
+        payload = {
+            'chat_id': channel,
+            'text': escape_markdown_v2(message),
+            'parse_mode': 'MarkdownV2',
+            'disable_web_page_preview': True
+        }
+        response = requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage", 
+            data=payload, 
+            timeout=15,
+            verify=certifi.where()  # Use certifi for secure API calls
+        )
+        response.raise_for_status()
+        return response.json().get('result', {}).get('message_id')
+    except Exception as e:
+        logger.error(f"Error sending Telegram message: {e}")
+        return None
+
+def process_current_affairs_url(url, collection):
+    """
+    Process current affairs URL with comprehensive error handling.
+    
+    Args:
+        url (str): URL to process
+        collection (pymongo.collection.Collection): MongoDB collection
+    
+    Returns:
+        bool: Processing success status
+    """
+    try:
+        response = fetch_url_with_retry(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        message = extract_current_affairs_questions(soup, url)
+        if not message:
+            logger.warning(f"No questions extracted from URL: {url}")
+            return False
+
+        promotional_message = "\n\n🚀 Join [Daily Current Affairs](https://t.me/daily_current_all_source) 🌟"
+        send_telegram_message(message + promotional_message, ENGLISH_CHANNEL)
+
+        if collection:
+            collection.insert_one({"url": url, "processed_at": datetime.datetime.utcnow()})
+
+        return True
+    except Exception as e:
+        logger.error(f"Error processing URL {url}: {e}")
+        return False
 
 def main():
     """
@@ -271,7 +262,6 @@ def main():
                 time.sleep(2)  # Rate limiting
         
         logger.info(f"Processed {processed_count} URLs successfully")
-    
     except Exception as e:
         logger.critical(f"Critical failure in main process: {e}")
     finally:
