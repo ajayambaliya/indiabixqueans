@@ -1,38 +1,36 @@
-name: Daily Current Affairs Script
+name: Process Current Affairs
+
 on:
   schedule:
-    # Schedule the workflow to run every day at 12:01 PM IST
-    # IST is UTC+5:30, so this translates to 06:31 AM UTC
-    - cron: '31 6 * * *'  # Fixed cron syntax (added missing * for days)
-  workflow_dispatch: # Allows manual trigger of the workflow
+    - cron: "31 6 * * *"  # Runs every hour (adjust as needed)
+  workflow_dispatch:  # Allows manual triggering of the workflow
+  push:
+    branches:
+      - main  # Trigger on push to the main branch
 
 jobs:
-  run-script:
+  run-current-affairs:
     runs-on: ubuntu-latest
+
     steps:
-      # Step 1: Check out the repository
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-      
-      # Step 2: Set up Python environment
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.9
-      
-      # Step 3: Install dependencies
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      
-      # Step 4: Run the script with error handling
-      - name: Run Current Affairs Script
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          MONGO_DB_URI: ${{ secrets.MONGO_DB_URI }}
-        run: |
-          set -e  # Exit immediately if a command exits with a non-zero status
-          python main.py
-        
-       
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt  # Make sure to include your requirements.txt file in the repo
+
+    - name: Set environment variables
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        MONGO_DB_URI: ${{ secrets.MONGO_DB_URI }}
+      run: echo "Environment variables set."
+
+    - name: Run Current Affairs Script
+      run: python main.py
