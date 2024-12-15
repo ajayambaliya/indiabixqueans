@@ -241,7 +241,7 @@ def process_current_affairs_url(url, collection):
         bool: Processing success status
     """
     try:
-        response = fetch_url_with_retry(url, verify=false)
+        response = fetch_url_with_retry(url, verify=False)
         soup = BeautifulSoup(response.text, 'html.parser')
         
         message_english = extract_current_affairs_questions(soup, url)
@@ -285,7 +285,7 @@ def fetch_current_affairs_links():
     """
     url = "https://www.indiabix.com/current-affairs/questions-and-answers/"
     try:
-        response = fetch_url_with_retry(url, verify=false)
+        response = fetch_url_with_retry(url, verify=False)
         soup = BeautifulSoup(response.text, 'html.parser')
         current_date = datetime.datetime.now().strftime('%Y-%m')
         
