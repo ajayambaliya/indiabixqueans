@@ -159,6 +159,21 @@ def extract_question_data(soup, url):
         logger.error(f"Unexpected error in extract_question_data: {e}")
         return None
 
+# Translate message to Gujarati
+def translate_message(message):
+    try:
+        sections = message.split("\n\n")
+        translated_sections = []
+        for section in sections:
+            if "Question:" in section or "Correct Answer:" in section or "Explanation:" in section:
+                translated_sections.append(GoogleTranslator(source='en', target='gu').translate(section))
+            else:
+                translated_sections.append(section)
+        return "\n\n".join(translated_sections)
+    except Exception as e:
+        logger.error(f"Translation error: {e}")
+        return message
+
 # Process single URL
 def process_current_affairs_url(url, collection):
     try:
@@ -174,8 +189,19 @@ def process_current_affairs_url(url, collection):
         promotional_message = "\n\n🚀 Join [Daily Current Affairs](https://t.me/daily_current_all_source) 🌟"
         english_messages = smart_split_message(message_english, footer=promotional_message)
 
+        english_links = []
         for msg in english_messages:
-            send_telegram_message(msg, ENGLISH_CHANNEL)
+            message_id = send_telegram_message(msg, ENGLISH_CHANNEL)
+            if message_id:
+                english_links.append(f"https://t.me/{ENGLISH_CHANNEL.strip('@')}/{message_id}")
+
+        for msg, link in zip(english_messages, english_links):
+            translated_msg = translate_message(msg)
+            translated_msg += f"\n\n🔗 Read in English: [Click here]({link})"
+            send_telegram_message(translated_msg, GUJARATI_CHANNEL)
+
+        if collection is not None:
+            collection.insert_one({"url": url, "processed_at": datetime.datetime.utcnow()})
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Error processing URL {url}: {e}")
@@ -184,9 +210,6 @@ def process_current_affairs_url(url, collection):
 
 # Main fetching function
 def fetch_and_process_current_affairs():
-    """
-    Fetch and process current affairs from the main page.
-    """
     url = "https://www.indiabix.com/current-affairs/questions-and-answers/"
     try:
         response = requests.get(url, verify=False, timeout=10)
@@ -202,19 +225,17 @@ def fetch_and_process_current_affairs():
             if not href or current_date not in href:
                 continue
 
-            # Explicit comparison with None
             if collection is not None and collection.find_one({"url": href}):
                 logger.info(f"URL already processed: {href}")
                 continue
 
             process_current_affairs_url(href, collection)
-            time.sleep(2)  # Delay to avoid server overload
+            time.sleep(2)  # Rate limit to avoid server overload
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Request failed: {e}")
     except Exception as e:
         logger.error(f"Unexpected error in fetch_and_process_current_affairs: {e}")
-
 
 if __name__ == '__main__':
     logger.info("Starting Current Affairs Processing")
