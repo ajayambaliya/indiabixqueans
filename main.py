@@ -76,12 +76,13 @@ def escape_markdown(text, version="v2"):
     Escape special characters for Telegram Markdown V2.
     """
     if version == "v2":
-        # MarkdownV2 requires escaping these special characters
+        # Characters that need escaping in Markdown V2
         escape_chars = '_*[]()~`>#+-=|{}.!'
         return ''.join('\\' + char if char in escape_chars else char for char in text)
     else:  # Default to Markdown v1
         special_characters = r'_[]()'
         return re.sub(f'([{re.escape(special_characters)}])', r'\\\1', text)
+
 
 def get_mongo_collection():
     """
@@ -223,7 +224,7 @@ def extract_question_data(soup, url):
                 question_message += f"🎯 *Correct Answer:* {escape_markdown(correct_answer_text)}\n\n"
                 question_message += f"💡 *Explanation:* {escape_markdown(explanation_text)}\n\n"
                 question_message += "\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\n\n"
-                
+                 
                 message += question_message
             
             except Exception as e:
@@ -249,12 +250,13 @@ def process_current_affairs_url(url, collection):
             logger.warning(f"No questions extracted from URL: {url}")
             return
         
-        promotional_message_english = (
-            "\n\n🚀 Never miss an update on the latest current affairs and quizzes! 🌟\n"
-            "👉 Join [Daily Current Affairs in English](https://t.me/daily_current_all_source) @Daily_Current_All_Source.\n"
-            "👉 Follow [Gujarati Current Affairs](https://t.me/gujtest) @CurrentAdda. 🇮🇳✨\n\n"
-            "Stay ahead of the competition. Join us now! 💪📚"
-        )
+            promotional_message_english = escape_markdown(
+                "\n\n🚀 Never miss an update on the latest current affairs and quizzes! 🌟\n"
+                "👉 Join [Daily Current Affairs in English](https://t.me/daily_current_all_source) @Daily_Current_All_Source.\n"
+                "👉 Follow [Gujarati Current Affairs](https://t.me/gujtest) @CurrentAdda. 🇮🇳✨\n\n"
+                "Stay ahead of the competition. Join us now! 💪📚"
+            )
+
         
         english_messages = smart_split_message(message_english, footer=promotional_message_english)
         english_message_links = []
