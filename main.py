@@ -57,9 +57,6 @@ def extract_date_from_url(url):
         logger.warning(f"Date extraction failed: {e}")
         return datetime.datetime.now().strftime('%Y-%m-%d')
 
-def escape_markdown(text):
-    special_characters = r'_*[]()~`>#+-=|{}.!'
-    return re.sub(f'([{re.escape(special_characters)}])', r'\\\1', text)
 
 
 def send_telegram_message(message, channel):
