@@ -34,7 +34,7 @@ def escape_markdown(text, version="v2"):
     Escape special characters for Telegram Markdown V2.
     """
     if version == "v2":
-        # MarkdownV2 special characters that need escaping
+        # MarkdownV2 requires escaping these special characters
         escape_chars = '_*[]()~`>#+-=|{}.!'
         return ''.join('\\' + char if char in escape_chars else char for char in text)
     else:  # Default to Markdown v1
@@ -88,16 +88,20 @@ def send_telegram_message(message, channel):
     
     try:
         response = requests.post(url, data=payload, timeout=10)
-        response.raise_for_status()
+        
+        # Add more detailed error logging
+        if response.status_code != 200:
+            logger.error(f"Telegram response status: {response.status_code}")
+            logger.error(f"Telegram response content: {response.text}")
+            raise requests.exceptions.HTTPError(f"HTTP {response.status_code}: {response.text}")
+        
         result = response.json().get('result', {})
         message_id = result.get('message_id')
         logger.info(f"Message sent successfully to {channel}")
         return message_id
     except requests.exceptions.RequestException as e:
         logger.error(f"Telegram send message failed: {e}")
-        if e.response is not None:
-            logger.error(f"Response: {e.response.text}")  # Log Telegram's error message
-        raise  # Retry using tenacity
+        raise  # Rethrow to allow for potential retry
 
 
 
@@ -138,7 +142,7 @@ def extract_question_data(soup, url):
     """
     try:
         date = extract_date_from_url(url)
-        message = f"✨✨ *Current Important Events - {date}* ✨✨\n\n"
+        message = f"✨✨ *Current Important Events \\- {date}* ✨✨\n\n"
         message += "🌟 *Today's Current Affairs Quiz* 🌟\n\n"
         
         question_containers = soup.find_all('div', class_='bix-div-container')
@@ -169,12 +173,11 @@ def extract_question_data(soup, url):
                 explanation_div = container.find('div', class_='bix-ans-description')
                 explanation_text = explanation_div.text.strip() if explanation_div else "No detailed explanation available"
                 
+                # Carefully escape and format
                 question_message = f"❓ *Question:* {escape_markdown(question_text)}\n\n"
                 question_message += f"🎯 *Correct Answer:* {escape_markdown(correct_answer_text)}\n\n"
                 question_message += f"💡 *Explanation:* {escape_markdown(explanation_text)}\n\n"
-                question_message += escape_markdown("--------------------------------------\n\n")
-
-
+                question_message += "\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\n\n"
                 
                 message += question_message
             
