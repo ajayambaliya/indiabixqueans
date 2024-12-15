@@ -296,7 +296,7 @@ def process_current_affairs_url(url, collection):
         logger.error(f"Comprehensive error processing URL {url}: {e}")
         return False
 
-Copydef fetch_current_affairs_links():
+def fetch_current_affairs_links():
     """
     Fetch current affairs links with comprehensive error handling and debugging.
     
