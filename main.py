@@ -22,8 +22,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration Constants
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", '6206446036:AAHtVn9LAvdRUtjCLmz1_49v5xRPSanTD1g')
-MONGO_DB_URI = os.getenv("MONGO_DB_URI", 'mongodb://localhost:27017/')
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+MONGO_DB_URI = os.getenv("MONGO_DB_URI")
 ENGLISH_CHANNEL = "@gujtest"
 GUJARATI_CHANNEL = "@gujtest1"
 CHANNEL_JOIN_LINK = "https://t.me/+UkTcRyx3rhERLwQR"
