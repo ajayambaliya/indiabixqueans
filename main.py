@@ -105,12 +105,12 @@ def fetch_url_with_retry(url, timeout=30):  # Increased timeout
         logger.error(f"Unexpected error in fetch_url_with_retry: {e}")
         raise
 
-def fetch_current_affairs_links(max_year_range=2):
+def fetch_current_affairs_links(max_days_range=30):
     """
     Enhanced link fetching with multiple date strategies.
     
     Args:
-        max_year_range (int): Number of years to look back for potential links
+        max_days_range (int): Number of days to look back for potential links
     
     Returns:
         list: URLs of current affairs
@@ -120,10 +120,10 @@ def fetch_current_affairs_links(max_year_range=2):
     possible_dates = []
     current_date = datetime.datetime.now()
     
-    # Generate possible date patterns for the last 2 years
-    for year in range(current_date.year - max_year_range, current_date.year + 1):
-        for month in range(1, 13):
-            possible_dates.append(f"{year}-{month:02d}")
+    # Generate possible date patterns for the last max_days_range days
+    for days_ago in range(max_days_range):
+        date = current_date - datetime.timedelta(days=days_ago)
+        possible_dates.append(date.strftime("%Y-%m-%d"))
     
     try:
         logger.debug(f"Attempting to fetch links from: {url}")
@@ -135,15 +135,23 @@ def fetch_current_affairs_links(max_year_range=2):
         all_links = soup.find_all('a', class_='text-link me-3')
         logger.debug(f"Total links found: {len(all_links)}")
         
-        # Extensive link filtering
+        # Extensive link filtering with detailed logging
         links = []
         for link in all_links:
             href = link.get('href', '')
             if href:
-                logger.debug(f"Examining link: {href}")
-                if any(date_pattern in href for date_pattern in possible_dates):
-                    links.append(href)
-                    logger.info(f"Matched link: {href}")
+                # Extract the date part from the URL
+                url_parts = href.split('/')
+                date_part = next((part for part in url_parts if len(part) == 10 and part.count('-') == 2), None)
+                
+                if date_part:
+                    logger.debug(f"Examining link: {href}, extracted date: {date_part}")
+                    
+                    if date_part in possible_dates:
+                        logger.info(f"Matched link: {href}")
+                        links.append(href)
+                    else:
+                        logger.debug(f"Date {date_part} not in possible dates")
         
         logger.info(f"Filtered links count: {len(links)}")
         return links
