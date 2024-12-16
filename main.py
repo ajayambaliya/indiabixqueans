@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 MONGO_DB_URI = os.getenv("MONGO_DB_URI")
 ENGLISH_CHANNEL = "@gujtest"
-GUJARATI_CHANNEL = "@gujtest1"
+GUJARATI_CHANNEL = "@gujtest2"
 CHANNEL_JOIN_LINK = "https://t.me/+UkTcRyx3rhERLwQR"
 QUESTIONS_PER_MESSAGE = 4  # Number of questions per message
 
