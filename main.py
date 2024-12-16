@@ -4,10 +4,9 @@ import time
 import logging
 import datetime
 import urllib3
-import certifi  # For SSL verification
+import certifi
 import requests
 from bs4 import BeautifulSoup
-from deep_translator import GoogleTranslator
 from pymongo import MongoClient, errors
 from tenacity import retry, stop_after_attempt, wait_fixed
 
@@ -16,10 +15,10 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Enhanced logging configuration
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,  # Changed to DEBUG for more detailed logging
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('current_affairs.log', mode='a', encoding='utf-8'),
+        logging.FileHandler('current_affairs_debug.log', mode='a', encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
@@ -72,19 +71,11 @@ def escape_markdown_v2(text):
     return ''.join(f'\\{char}' if char in escape_chars else char for char in text)
 
 @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
-def fetch_url_with_retry(url, timeout=15):
+def fetch_url_with_retry(url, timeout=30):  # Increased timeout
     """
-    Enhanced URL fetching with comprehensive error handling.
-    
-    Args:
-        url (str): URL to fetch
-        timeout (int): Request timeout in seconds
-    
-    Returns:
-        requests.Response: HTTP response
+    Enhanced URL fetching with even more comprehensive error handling.
     """
     try:
-        # Validate URL before request
         if not url or not url.startswith(('http://', 'https://')):
             raise ValueError(f"Invalid URL: {url}")
         
@@ -95,50 +86,71 @@ def fetch_url_with_retry(url, timeout=15):
             'Referer': 'https://www.google.com/'
         }
         
-        logger.info(f"Attempting to fetch URL: {url}")
+        logger.debug(f"Attempting to fetch URL with detailed logging: {url}")
         
         response = requests.get(
             url, 
             headers=headers,
-            verify=False,  # Use certifi for SSL verification
+            verify=False,
             timeout=timeout
         )
         response.raise_for_status()
         
-        logger.info(f"Successfully fetched URL: {url}")
+        logger.debug(f"Successfully fetched URL, status code: {response.status_code}")
         return response
     except requests.exceptions.RequestException as e:
-        logger.error(f"Detailed request error for {url}: {e}")
-        logger.error(f"Error type: {type(e)}")
+        logger.error(f"Request exception for {url}: {e}")
         raise
     except Exception as e:
-        logger.error(f"Unexpected error fetching {url}: {e}")
-        logger.error(f"Error type: {type(e)}")
+        logger.error(f"Unexpected error in fetch_url_with_retry: {e}")
         raise
 
-def fetch_current_affairs_links():
+def fetch_current_affairs_links(max_year_range=2):
     """
-    Fetch current affairs links with comprehensive error handling and debugging.
+    Enhanced link fetching with multiple date strategies.
+    
+    Args:
+        max_year_range (int): Number of years to look back for potential links
     
     Returns:
         list: URLs of current affairs
     """
     url = "https://www.indiabix.com/current-affairs/questions-and-answers/"
+    
+    possible_dates = []
+    current_date = datetime.datetime.now()
+    
+    # Generate possible date patterns for the last 2 years
+    for year in range(current_date.year - max_year_range, current_date.year + 1):
+        for month in range(1, 13):
+            possible_dates.append(f"{year}-{month:02d}")
+    
     try:
-        logger.info(f"Attempting to fetch links from: {url}")
+        logger.debug(f"Attempting to fetch links from: {url}")
+        logger.debug(f"Possible date patterns: {possible_dates}")
+        
         response = fetch_url_with_retry(url, verify=False)
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        current_date = datetime.datetime.now().strftime('%Y-%m')
-        logger.info(f"Searching for links matching current date pattern: {current_date}")
-        
         all_links = soup.find_all('a', class_='text-link me-3')
-        links = [link.get('href') for link in all_links if link.get('href') and current_date in link.get('href')]
+        logger.debug(f"Total links found: {len(all_links)}")
+        
+        # Extensive link filtering
+        links = []
+        for link in all_links:
+            href = link.get('href', '')
+            if href:
+                logger.debug(f"Examining link: {href}")
+                if any(date_pattern in href for date_pattern in possible_dates):
+                    links.append(href)
+                    logger.info(f"Matched link: {href}")
         
         logger.info(f"Filtered links count: {len(links)}")
         return links
+    
     except Exception as e:
-        logger.error(f"Error fetching current affairs links: {e}")
+        logger.error(f"Comprehensive error in fetch_current_affairs_links: {e}")
+        logger.error(f"Error type: {type(e)}")
         return []
 
 def extract_current_affairs_questions(soup, url):
