@@ -100,7 +100,7 @@ def fetch_url_with_retry(url, timeout=15):
         response = requests.get(
             url, 
             headers=headers,
-            verify=certifi.where(),  # Use certifi for SSL verification
+            verify=False,  # Use certifi for SSL verification
             timeout=timeout
         )
         response.raise_for_status()
@@ -126,7 +126,7 @@ def fetch_current_affairs_links():
     url = "https://www.indiabix.com/current-affairs/questions-and-answers/"
     try:
         logger.info(f"Attempting to fetch links from: {url}")
-        response = fetch_url_with_retry(url)
+        response = fetch_url_with_retry(url, verify=False)
         soup = BeautifulSoup(response.text, 'html.parser')
         
         current_date = datetime.datetime.now().strftime('%Y-%m')
