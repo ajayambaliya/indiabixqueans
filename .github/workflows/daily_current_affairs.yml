@@ -2,7 +2,7 @@ name: Process Current Affairs
 
 on:
   schedule:
-    - cron: "0 * * * *"  # Runs every hour
+    - cron: "30 15 * * *"  # Runs daily at 9:00 PM IST (15:30 UTC)
   workflow_dispatch:  # Manual trigger
   push:
     branches:
@@ -30,8 +30,6 @@ jobs:
       run: |
         echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}"
         echo "MONGO_DB_URI=${{ secrets.MONGO_DB_URI }}"
-
-  
 
     - name: Run Current Affairs Script
       env:
