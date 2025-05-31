@@ -1,8 +1,6 @@
 name: Process Current Affairs
 
-on:
-  schedule:
-    - cron: "30 15 * * *"  # Runs daily at 9:00 PM IST (15:30 UTC)
+
   workflow_dispatch:  # Manual trigger
   push:
     branches:
